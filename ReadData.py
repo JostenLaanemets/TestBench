@@ -118,12 +118,18 @@ def read_loop():
 def connect_ports():
     global ser_out1, ser_out2
     try:
+        if ser_out1 and ser_out1.is_open:
+            ser_out1.close()
+
         ser_out1 = initialize_serial(port_var1.get(), baudrate_var1.get(), data1)
     except ValueError:
         data1.config(text="Connection Failed", background='red')
         read_button.config(bg='#3498db')
          
     try:
+        if ser_out2 and ser_out2.is_open:
+            ser_out2.close()
+
         ser_out2 = initialize_serial(port_var2.get(), baudrate_var2.get(), data2)
     except ValueError:
         data2.config(text="Connection Failed", background='red')
@@ -184,7 +190,7 @@ def GUI():
     #Tkinter initalizing
     s = tk.Tk()
     s.title("Data Reading")
-    s.geometry("800x350")
+    s.geometry("950x350")
     s.config(bg='#ffffff')
     
 
