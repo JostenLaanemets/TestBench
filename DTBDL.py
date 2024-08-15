@@ -14,6 +14,7 @@ import csv
 #mm
 
 
+start_logging = False
 start = False
 ser_out1 = None
 ser_out2 = None
@@ -37,10 +38,12 @@ def initialize_serial(port_number,  port_baudrate, data_number):
             bytesize=serial.SEVENBITS,
             
         )
+
         if ser.is_open :
             print(f"Connected to {port_number}")
             data_number.config(text="Connected",background='green')
-            read_button.config(bg='orange')
+            read_button.config(bg='orange', state='active')
+            
             
     except serial.SerialException or ValueError:
         print(f"Failed to connect to {port_number}")
@@ -55,8 +58,8 @@ def initialize_serial(port_number,  port_baudrate, data_number):
 # Data cleaning and decodeing from unnecessary characters
 def cleanData(serialIn):
     try:
-        data_cleaning = serialIn.readline()
-        data_cleaning = data_cleaning.decode('utf-8').strip()
+        raw_data = serialIn.readline()
+        data_cleaning = raw_data.decode('utf-8').strip()
         if data_cleaning:  
             data_cleaning = ' '.join(data_cleaning.split())
             return float(data_cleaning)/10.0
@@ -64,9 +67,21 @@ def cleanData(serialIn):
             return 0.0
     except ValueError:
         print("Failed data cleaning")
-        print(data_cleaning)
-
+        
         return 0.0
+
+#####################################################################   
+def log_data():
+    global start_time, start_logging  
+    if start_logging:
+        start_logging = False     
+        log_button.config(text="Start Data Logging", bg='Green')
+    else:
+        start_logging = True
+        start_time = time.time()
+        log_button.config(text="Stop Data Loging", bg='yellow')
+
+
 
 
 #####################################################################
@@ -95,12 +110,15 @@ def start_reading():
 
 # Loop to continuously read from the serial ports
 def read_loop():
-    global start, current_time
+    global start, current_time, start_time, start_logging
+    
+    start_time = time.time() 
     data_out1 = 0.0
     data_out2 = 0.0
-    start_time = time.time()  
+    start_logging= 0
     elapsed_time = 0.0
-    load_cell_unit = 'Kg'
+    load_cell_unit = data_unit1.get()
+    other_unit = data_unit2.get()
 
     #################################################################
     #Main data reading loop
@@ -114,9 +132,9 @@ def read_loop():
             
         if ser_out2:
             data_out2 = cleanData(ser_out2)
-            data2.config(text=f'{data_out2}', background='#ecf0f1')
+            data2.config(text=f'{data_out2} {other_unit}', background='#ecf0f1')
 
-        if data_out1 or data_out2:
+        if (data_out1 or data_out2) and start_logging:
             last_time = elapsed_time 
             elapsed_time = current_time - (start_time * 1000) 
             elapsed_time= f'{elapsed_time:.0f}'
@@ -183,27 +201,28 @@ def select_directory():
     selected_dir = tk.filedialog.askdirectory()
     if selected_dir:
         save_directory.set(selected_dir)
+        if save_directory.get()!= "Select Directory":
+            log_button.config(state='active')
 
 def writeToFile(d1, d2, ts):
-    if save_checkbox_var.get():  # Check if saving is enabled
-        file_path = f"{save_directory.get()}/{file_name_var.get()}"
-        with open(file_path, 'a') as file:
-            w = csv.writer(file)
-            w.writerow([d1, d2, ts])
+    file_path = f"{save_directory.get()}/{file_name_var.get()}"
+    with open(file_path, 'a') as file:
+        w = csv.writer(file)
+        w.writerow([d1, d2, ts])
 
 
 #####################################################################
 # GUI Function
 def GUI():
 
-    global read_button,  data1, data2, timestamp 
+    global read_button,  data1, data2, timestamp, data_unit1, data_unit2
     global port_var1, port_var2, baudrate_var1, baudrate_var2, baudrate_menu1, baudrate_menu2, port_menu2, port_menu1
-    global save_directory, save_checkbox_var, file_name_var
+    global save_directory, file_name_var ,log_button
     #################################################################
     #Tkinter initalizing
     s = tk.Tk()
     s.title("Deformation Test Bench Data Logger")
-    s.geometry("950x350")
+    s.geometry("950x400")
     s.config(bg='#ffffff')
     
 
@@ -215,13 +234,12 @@ def GUI():
     file_name_var = tk.StringVar()
     file_name_var.set("DataLog1.csv")  
     
-    save_checkbox_var = tk.BooleanVar()
-    save_checkbox_var.set(False)
 
     file_frame = tk.Frame(s, highlightbackground='black', highlightthickness=3, pady=2, padx=20)
     file_name_entry = tk.Entry(file_frame,
                                 textvariable=file_name_var,
-                                font=("Arial", 12), 
+                                font=("Arial", 12, 'italic'), 
+                                
                                 width=20
                                 )
     
@@ -230,41 +248,50 @@ def GUI():
                                font=("Arial", 10)
                                )
     
-    save_checkbox = tk.Checkbutton(file_frame,font=('Arial', 11), text="Save Data to CSV", variable=save_checkbox_var)
+
     
-    save_checkbox.pack(side='top', padx=0, anchor='w')
-    file_name_label.pack(side='top', padx=0, anchor='w')
-    file_name_entry.pack(side='bottom', padx=0, anchor='w')
+
+    
     
     #################################################################
-    directory_frame = tk.Frame(s, highlightbackground='black', highlightthickness=3)
-    directory_label = tk.Label(directory_frame,
+    
+    directory_label = tk.Label(file_frame,
                                textvariable=save_directory,
                                font=("Arial", 12, 'italic'),
+                               bg='white',
                                fg='black',
-                               width=23,
+                               width=18,
                                height=1, 
                                anchor='w',
+                               relief='sunken'
+
                                )
 
-    directory_button = tk.Button(directory_frame,
-                                text="Select Directory",
+    directory_button = tk.Button(file_frame,
+                                text="...",
                                 command=select_directory,
                                 anchor='w', 
                                 cursor="hand2",
-                                font=("Arial", 12, 'bold'),
+                                font=("Arial", 10),
                                 activebackground='#909497',
                                 activeforeground='white',
                                 highlightbackground='black',
-                                border=4,
-                                width=23,
-                                height=1
+                                border=3,
+                                width=0,
+                                height=1,
+                                padx=6,
+                                pady=0.0001
+                                
                                 )
     
-    directory_button.pack(side='top', padx=0, pady=0, anchor='w')
-    directory_label.pack(side='bottom', padx=5, pady=5, anchor='w')
-    #################################################################
+
+    file_name_label.pack(side='top', padx=0, anchor='w')
+    file_name_entry.pack(side='top', padx=0, anchor='w')
+    directory_button.pack(side='right', padx=0, pady=2, anchor='w')
+    directory_label.pack(side='left', padx=0, pady=0, anchor='w')
+
     #Port Frame
+    #################################################################
     port_frame1 = tk.Frame(s,
                         bg='#ffffff',
                         highlightbackground='black',
@@ -386,11 +413,40 @@ def GUI():
                     highlightcolor="green",
                     highlightthickness=2,
                     justify="center",
-                    
+                    state='disabled',
                     padx=10,
                     pady=5,
                     width=18)
     
+    #################################################################
+    #Data logging 
+
+    log_button = tk.Button(s, 
+                    text="Log to File", 
+                    command=log_data,
+                    background='#3498db',
+                    activebackground="#1F618D", 
+                    activeforeground="white",
+                    anchor="center",
+                    bd=3,
+                    cursor="hand2",
+                    disabledforeground="gray",
+                    fg="black",
+                    font=("Arial", 16, 'bold'),
+                    height=2,
+                    highlightbackground="black",
+                    highlightcolor="green",
+                    highlightthickness=2,
+                    justify="center",
+                    
+                    padx=10,
+                    pady=5,
+                    width=18,
+                    
+                    state='disabled'
+                    )
+
+
     #################################################################
     d1_frame = tk.Frame(s, highlightbackground='black', highlightthickness=3)
     d2_frame = tk.Frame(s, highlightbackground='black', highlightthickness=3)   
@@ -423,7 +479,31 @@ def GUI():
                     font=("Arial", 20),
                     height=1, 
                     width=15)
-
+    #################################################################
+    # Dropdown for units
+    data_unit1 = tk.StringVar()
+    data_unit1.set("kg")
+    units1 = ['kg','N'] 
+    units_menu1 = tk.OptionMenu(d1_frame, data_unit1, *units1)
+    units_menu1.configure(padx=1,
+                        pady=1,
+                        width=3,
+                        height=1, 
+                        font=("Arial",12)
+                        
+                        )
+    
+    data_unit2 = tk.StringVar()
+    data_unit2.set("mm")
+    units2 = ['mm','µm'] 
+    units_menu2 = tk.OptionMenu(d2_frame, data_unit2, *units2)
+    units_menu2.configure(padx=1,
+                        pady=1,
+                        width=3,
+                        height=1, 
+                        font=("Arial",12)
+                        
+                        )
     #################################################################
     colorLable='#3498DB'
     data_lable1 = tk.Label(d1_frame,
@@ -434,7 +514,7 @@ def GUI():
                     bd= 6,
                     font=("Arial", 12,'bold'),
                     height=1, 
-                    width=25)
+                    width=18)
     
     data_lable2 = tk.Label(d2_frame,
                     text="mm",
@@ -444,7 +524,7 @@ def GUI():
                     bd= 6,
                     font=("Arial", 12, 'bold'),
                     height=1, 
-                    width=25)
+                    width=18)
 
     time_lable1 = tk.Label(ts_frame,
                     text="Timestamp",
@@ -455,30 +535,33 @@ def GUI():
                     font=("Arial", 12,'bold'),
                     height=1, 
                     width=25)
+    
     #################################################################
     data1.pack(side='bottom', padx=0, pady=0)
-    data_lable1.pack(side='top', padx=0, pady=0)
+    data_lable1.pack(side='left', padx=0, pady=0)
+    units_menu1.pack(side='right',padx=0,pady=0)
+    
 
     data2.pack(side='bottom', padx=0, pady=0)
-    data_lable2.pack(side='top', padx=0, pady=0)
+    data_lable2.pack(side='left', padx=0, pady=0)
+    units_menu2.pack(side='right',padx=0,pady=0)
     
     timestamp.pack(side='bottom', padx=0, pady=0)
     time_lable1.pack(side='top', padx=0, pady=0)
 
 ##################################################################### 
 #GRID
-    port_frame1.grid(row=0, column=0, pady=5, padx=10)
-    port_frame2.grid(row=0, column=1, padx=10, pady=5)
-    connect_frame.grid(row=0, column=2, pady=5, padx=10)
+    port_frame1.grid(row=0, column=0, pady=5, padx=10, sticky='w')
+    port_frame2.grid(row=0, column=1, padx=10, pady=5, sticky='w')
+    connect_frame.grid(row=0, column=2, pady=5, padx=10, sticky='w')
 
-    read_button.grid(row=3, column=0, pady=20, padx=10, )
+    d1_frame.grid(row=2, column=0, pady=10, padx=10, sticky='w')
+    d2_frame.grid(row=2, column=1, pady=10, padx=10, sticky='w')
+    ts_frame.grid(row=2, column=2, pady=10, padx=10, sticky='w')
 
-    d1_frame.grid(row=2, column=0, pady=10, padx=10, )
-    d2_frame.grid(row=2, column=1, pady=10, padx=10, )
-    ts_frame.grid(row=2, column=2, pady=10, padx=10, )
-
-    directory_frame.grid(row=3, column=1, pady=10, padx=10, columnspan=2, sticky='w')
-    file_frame.grid(row=3, column=2, pady=10, padx=10, sticky='w')
+    read_button.grid(row=3, column=0, pady=20, padx=10, sticky='w')
+    log_button.grid(row=3, column=2, pady=20, padx=10, sticky='w')
+    file_frame.grid(row=3, column=1, pady=20, padx=10, sticky='w')
 
     s.mainloop()
 
