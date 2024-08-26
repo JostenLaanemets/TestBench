@@ -2,6 +2,8 @@ import serial
 import time
 import tkinter as tk
 from tkinter.filedialog import askdirectory
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 import serial.tools.list_ports
 import threading
 import csv
@@ -17,6 +19,10 @@ start_logging = False
 start = False
 ser_out1 = None
 ser_out2 = None
+
+plot_x = []
+plot_y =[]
+plot_enabled = False
 
 
 # Function to list available serial ports
@@ -88,6 +94,7 @@ def log_data():
 
 
 
+
 #####################################################################
 # Start or stop reading data from serial ports
 def start_reading():
@@ -114,7 +121,7 @@ def start_reading():
 
 # Loop to continuously read from the serial ports
 def read_loop():
-    global start, current_time, start_time, start_logging
+    global start, current_time, start_time, start_logging ,plot_x, plot_y
     
     start_time = time.time() 
     data_out1 = 0.0
@@ -123,6 +130,9 @@ def read_loop():
     elapsed_time = 0.0
     load_cell_unit = data_unit1.get()
     mm_unit = data_unit2.get()
+
+    plot_y = []
+    plot_x = []
 
     #################################################################
     #Main data reading loop
@@ -145,7 +155,10 @@ def read_loop():
 
             timestamp.config(text=f'Time: {elapsed_time} ms')
             if last_time != elapsed_time:
-                writeToFile(data_out1,data_out2,elapsed_time)        
+                writeToFile(data_out1,data_out2,elapsed_time)
+            
+            plot_x.append(data_out1)
+            plot_y.append(data_out2)
 
 
 #####################################################################
@@ -214,6 +227,37 @@ def writeToFile(d1, d2, ts):
         w = csv.writer(file)
         w.writerow([d1, d2, ts])
 
+######################################################################
+
+
+    
+def toggle_plot():
+    global plot_enabled
+    global plot_x, plot_y, plot_enabled
+    plot_enabled = not plot_enabled
+    plot_button.config(text="Hide Plot" if plot_enabled else "Show Plot")
+    if plot_enabled:
+        fig, ax = plt.subplots()
+        ax.plot(plot_x, plot_y, label='Data Plot')
+        ax.set_xlabel('X Data')
+        ax.set_ylabel('Y Data')
+        ax.set_title('Data Plot')
+        ax.legend()
+
+        # Embed the plot into the Tkinter window
+        canvas = FigureCanvasTkAgg(fig, master=s)
+        canvas.draw()
+        canvas.get_tk_widget().grid(row=5, column=0, columnspan=3, pady=10)
+    else:
+        # Clear the plot if it's disabled
+        for widget in s.grid_slaves(row=5):
+            widget.grid_forget()
+        plot_x = []
+        plot_y = []
+
+
+
+
 
 #####################################################################
 # GUI Function
@@ -221,12 +265,14 @@ def GUI():
 
     global read_button,  data1, data2, timestamp, data_unit1, data_unit2
     global port_var1, port_var2, baudrate_var1, baudrate_var2, baudrate_menu1, baudrate_menu2, port_menu2, port_menu1
-    global save_directory, file_name_var ,log_button
+    global save_directory, file_name_var ,log_button, plot_button
+
+    global s
     #################################################################
     #Tkinter initalizing
     s = tk.Tk()
     s.title("Deformation Test Bench Data Logger")
-    s.geometry("1200x600")
+    s.geometry("1000x1000")
     s.config(bg='#ffffff')
     
 
@@ -398,7 +444,7 @@ def GUI():
     
     connect_button.pack(side='top', padx=0, pady=0, anchor='w')
     refresh_button.pack(side='bottom', padx=1, pady=10, anchor='w')
-
+    #################################################################
     # Button to start reading data
     read_button = tk.Button(s, 
                     text="Start Reading Serial", 
@@ -422,6 +468,28 @@ def GUI():
                     pady=5,
                     width=18)
     
+
+    #################################################################
+    plot_button = tk.Button(s, 
+                        text="Show Plot", 
+                        command=toggle_plot,
+                        background='#3498db',
+                        activebackground="#1F618D", 
+                        activeforeground="white",
+                        anchor="center",
+                        bd=3,
+                        cursor="hand2",
+                        disabledforeground="gray",
+                        fg="black",
+                        font=("Arial", 16, 'bold'),
+                        height=2,
+                        highlightbackground="black",
+                        highlightcolor="green",
+                        highlightthickness=2,
+                        justify="center",
+                        padx=10,
+                        pady=5,
+                        width=18)
     #################################################################
     #Data logging 
 
@@ -566,6 +634,7 @@ def GUI():
     read_button.grid(row=3, column=0, pady=20, padx=10, sticky='w')
     log_button.grid(row=3, column=2, pady=20, padx=10, sticky='w')
     file_frame.grid(row=3, column=1, pady=20, padx=10, sticky='w')
+    plot_button.grid(row=4, column=0, pady=20, padx=10, sticky='w')
 
     s.mainloop()
 
