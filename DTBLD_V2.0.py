@@ -6,8 +6,14 @@ from tkinter.filedialog import askdirectory
 import serial.tools.list_ports
 import csv
 import time
-
-
+#############################################################################################
+## M2rkused ##
+##############
+#
+#
+#
+#
+#############################################################################################
 data1_out = 0.0
 data2_out = 0.0
 
@@ -36,13 +42,13 @@ def refresh_ports():
         port_var1.set(save_p1)
     else:
         port_var1.set("Select Port 1")
-        data1.config(text="refreshed",background='#ecf0f1')
+        data1.config(text="",background='#ecf0f1')
 
     if save_p2 in ports:
         port_var2.set(save_p2)
     else:
         port_var2.set("Select Port 2")
-        data2.config(text="refreshed",background='#ecf0f1')
+        data2.config(text="",background='#ecf0f1')
     
 #####################################################################
 def read_serial_data(port, baudrate, queue):
@@ -59,6 +65,7 @@ def read_serial_data(port, baudrate, queue):
                         print(f"Received invalid data: {data}")
                         continue
     except Exception as e:
+        print(e)
         queue.put(f"Error: {e}")
 #####################################################################
 
@@ -85,7 +92,7 @@ def toggle_reading(queue1, queue2):
             p.terminate()
         processes = []
         read_button.config(text="Start Reading Serial", bg='#3498db')
-        log_button.config(text="Start Data Logging", bg='#3498db')
+        log_button.config(text="Log to File", bg='#3498db')
         print("Stopped reading")
         
     else:
@@ -95,24 +102,27 @@ def toggle_reading(queue1, queue2):
             elapsed_time = 0.0
 
             port1 = port_var1.get()
-            baudrate1 = int(baudrate_var1.get())
-            p1 = multiprocessing.Process(target=read_serial_data, args=(port1, baudrate1, queue1))
+            if port1 != 'None':
+                baudrate1 = int(baudrate_var1.get())
+                p1 = multiprocessing.Process(target=read_serial_data, args=(port1, baudrate1, queue1))
+                p1.start()
+                processes.append(p1)
+
 
             port2 = port_var2.get()
-            baudrate2 = int(baudrate_var2.get())
-            p2 = multiprocessing.Process(target=read_serial_data, args=(port2, baudrate2, queue2))
+            if port2 != "None":
+                baudrate2 = int(baudrate_var2.get())
+                p2 = multiprocessing.Process(target=read_serial_data, args=(port2, baudrate2, queue2))
+                p2.start()
+                processes.append(p2)
+
 
             read_button.config(text="Stop Reading Serial", bg='Red')
             print("Started reading")
             
-            p1.start()
-            p2.start()
-
-            processes.extend([p1, p2])
+                
         except ValueError:
             print("Port or Baudrate not selected")
-
-
 
 
 #####################################################################
