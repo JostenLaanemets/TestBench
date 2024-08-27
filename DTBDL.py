@@ -61,8 +61,10 @@ def cleanData(serialIn, unit):
         data_cleaning = raw_data.decode('utf-8').strip()
         if data_cleaning:  
             data_cleaning = ' '.join(data_cleaning.split())
-            value = float(data_cleaning)/10.0
-            if unit == 'N':
+            value = float(data_cleaning)
+            if unit == 'kg':
+                value = value / 10.0
+            elif unit == 'N':
                 value *= 9.80665
             elif unit == 'µm':
                 value *= 1000
