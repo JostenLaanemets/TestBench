@@ -17,6 +17,9 @@ import time
 data1_out = 0.0
 data2_out = 0.0
 
+#data1_offset = 0.0
+data2_offset = 0.0
+
 start_logging = False
 start = False
 processes = []  
@@ -52,6 +55,7 @@ def refresh_ports():
     
 #####################################################################
 def read_serial_data(port, baudrate, queue):
+    data = 0.0
     try:
         with serial.Serial(port, baudrate, parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, bytesize=serial.EIGHTBITS) as ser:
             while True:
@@ -80,10 +84,23 @@ def log_data():
         log_button.config(text="Stop Data Loging", bg='yellow')
 
 #####################################################################
+def zero_point():
+    global data1_offset, data2_offset
+    try:
+        #data1_offset = queue1.get(timeout=0.01)
+        data2_offset = queue2.get(timeout=0.01)
+    except queue.Empty:
+        data2_offset = 0.0
+        print("offset is already at zero")
+    
+    
+#####################################################################
+
 # Function to start reading from multiple serial ports
 def toggle_reading(queue1, queue2):
     global start,start_logging, processes, read_button
     global start_time, elapsed_time
+    global data1_offset, data2_offset
 
     if start:
         start = False
@@ -96,33 +113,40 @@ def toggle_reading(queue1, queue2):
         print("Stopped reading")
         
     else:
-        start = True
-        try:
-            start_time =time.time()
-            elapsed_time = 0.0
 
+        start = True
+        start_time =time.time()
+        elapsed_time = 0.0
+        print("Started reading")
+        try:
             port1 = port_var1.get()
             if port1 != 'None':
                 baudrate1 = int(baudrate_var1.get())
                 p1 = multiprocessing.Process(target=read_serial_data, args=(port1, baudrate1, queue1))
                 p1.start()
                 processes.append(p1)
+        except ValueError as e:
+            
+            read_button.config(text="Start Reading Serial", bg='#3498db')
+            print("Port or Baudrate not selected: ", e)
 
-
+            
+        try:
             port2 = port_var2.get()
             if port2 != "None":
                 baudrate2 = int(baudrate_var2.get())
                 p2 = multiprocessing.Process(target=read_serial_data, args=(port2, baudrate2, queue2))
                 p2.start()
                 processes.append(p2)
-
-
-            read_button.config(text="Stop Reading Serial", bg='Red')
-            print("Started reading")
+        except ValueError as e:
             
-                
-        except ValueError:
-            print("Port or Baudrate not selected")
+            read_button.config(text="Start Reading Serial", bg='#3498db')
+            print("Port or Baudrate not selected: ", e)
+        
+        read_button.config(text="Stop Reading Serial", bg='Red')
+        
+            
+
 
 
 #####################################################################
@@ -135,7 +159,8 @@ def update_labels(queue1, queue2):
            
             if not queue1.empty():
                 data1_out = queue1.get(timeout=0.01)
-                if isinstance(data1_out, (int, float)):  
+                if isinstance(data1_out, (int, float)):
+                    #data1_out -= data1_offset  
                     if data_unit1.get() == 'kg':
                         data1_out *= 0.1
                         data1_out = round(data1_out , 4)
@@ -146,7 +171,8 @@ def update_labels(queue1, queue2):
 
             if not queue2.empty():
                 data2_out = queue2.get(timeout=0.01)
-                if isinstance(data2_out, (int, float)): 
+                if isinstance(data2_out, (int, float)):
+                    data2_out -= data2_offset 
                     if data_unit2.get() == 'mm':
                         data2_out = round(data2_out , 2)
                     elif data_unit2.get() == 'µm':
@@ -232,7 +258,27 @@ def create_gui(queue1, queue2):
                                height=1, 
                                width=6)
     
-    
+    #################################################################
+    zero_button = tk.Button(root, 
+                    text="Zero value", 
+                    command=zero_point,
+                    background='#3498db',
+                    activebackground="#1F618D", 
+                    activeforeground="white",
+                    anchor="center",
+                    bd=3,
+                    cursor="hand2",
+                    disabledforeground="gray",
+                    fg="black",
+                    font=("Arial", 16, 'bold'),
+                    height=2,
+                    highlightbackground="black",
+                    highlightcolor="green",
+                    highlightthickness=2,
+                    justify="center",
+                    padx=10,
+                    pady=5,
+                    width=18)
     
     
     #################################################################
@@ -513,8 +559,9 @@ def create_gui(queue1, queue2):
     
     refresh_button.grid(row=0, column=2, pady=20, padx=10, sticky='w')
     read_button.grid(row=3, column=0, pady=20, padx=10, sticky='w')
-    log_button.grid(row=3, column=2, pady=20, padx=10, sticky='w')
-    file_frame.grid(row=3, column=1, pady=20, padx=10, sticky='w')
+    zero_button.grid(row=3, column=1, pady=20, padx=10, sticky='w')
+    log_button.grid(row=4, column=0, pady=20, padx=10, sticky='w')
+    file_frame.grid(row=4, column=1, pady=20, padx=10, sticky='w')
     #####################################################################
     
     root.after(1, update_labels, queue1, queue2)
