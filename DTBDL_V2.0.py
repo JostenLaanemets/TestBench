@@ -208,6 +208,12 @@ def writeToFile(d1, d2, ts):
         w = csv.writer(file)
         w.writerow([d1, d2, ts])
 
+def cleanup():
+    global processes
+    for p in processes:
+        p.terminate()
+    processes = []
+
 #####################################################################
 def create_gui(queue1, queue2):
     global root
@@ -563,16 +569,21 @@ def create_gui(queue1, queue2):
     log_button.grid(row=4, column=0, pady=20, padx=10, sticky='w')
     file_frame.grid(row=4, column=1, pady=20, padx=10, sticky='w')
     #####################################################################
-    
+    root.protocol('WM_DELETE_WINDOW', cleanup_and_close)
+
+
     root.after(1, update_labels, queue1, queue2)
     root.mainloop()
 
 
-
+def cleanup_and_close():
+    cleanup()
+    root.destroy()
 
 
 
 if __name__ == "__main__":
+    multiprocessing.freeze_support()
     queue1 = multiprocessing.Queue()
     queue2 = multiprocessing.Queue()
 
