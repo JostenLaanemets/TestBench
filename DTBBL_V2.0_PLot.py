@@ -7,13 +7,15 @@ import serial.tools.list_ports
 import csv
 import time
 from matplotlib.figure import Figure
-from matplotlib.backends.backend_tkagg import (FigureCanvasTkAgg, NavigationToolbar2Tk)
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+import matplotlib.pyplot as plt
+from collections import deque
 
 #############################################################################################
 ## M2rkused ##
 ##############
-# Indikaatori nullimise nuppu peab mitu korda vajutama et töötaks
-# 
+#
+#
 #
 #
 #############################################################################################
@@ -23,6 +25,17 @@ data2_out = 0.0
 #data1_offset = 0.0
 data2_offset = 0.0
 
+x_data = deque([0.0,0.0])
+y_data = deque([0.0,0.0])
+
+
+interval_time = 0.0
+x_max = 10
+x_min = -10
+y_max = 5
+y_min = -5
+
+start_time = 0
 start_logging = False
 start = False
 processes = []  
@@ -82,27 +95,42 @@ def read_serial_data(port, baudrate, queue):
 
 #####################################################################
 def log_data():
-    global start_time, start_logging  
+    global start_time, start_logging, interval_time
     if start_logging:
         start_logging = False     
         log_button.config(text="Start Data Logging", bg='Green')
     else:
         start_logging = True
         start_time = time.time()
+        interval_time = time.time()
         log_button.config(text="Stop Data Loging", bg='yellow')
 
 
 #####################################################################
 def zero_point():
     global data1_offset, data2_offset
+    global x_max, x_min, y_max, y_min
     try:
         #data1_offset = queue1.get(timeout=0.01)
-        data2_offset = queue2.get(timeout=0.1)
+        data2_offset = queue2.get(timeout=0.01)
+
+            # Reset the plot data
+        x_data.clear()
+        y_data.clear()
+
+        x_data.append(0.0)
+        y_data.append(0.0)
+
+        y_max = 0.01
+        y_min = -0.01  
+
+        ax.clear()
+        canvas.draw()
+        
+        
     except queue.Empty:
         data2_offset = 0.0
         print("offset is already at zero")
-
-
     
     
 #####################################################################
@@ -191,11 +219,58 @@ def update_labels(queue1, queue2):
 
             if start_logging and last_time != elapsed_time:
                 writeToFile(data1_out, data2_out, elapsed_time)
+            #########################################################
+            
+            x_data.append(data1_out)    
+            y_data.append(data2_out)    
+
 
         except queue.Empty:
             break
-
     root.after(1, update_labels, queue1, queue2)
+
+
+def update_plot():
+    global x_max, x_min, y_max, y_min, start_time, interval_time
+    current_time = time.time()
+
+    ax.clear()  
+   
+    #if current_time > (interval_time + 0.1) and start:
+    #    interval_time = time.time()
+    #    x_data.append(data1_out)
+    #    y_data.append(data2_out)
+
+    
+        
+    
+    if x_max < x_data[-1]:
+        x_max = x_data[-1]
+    elif x_min > x_data[-1]:
+        x_min = x_data[-1]
+
+    if y_max < y_data[-1]:
+        y_max = y_data[-1]
+    elif y_min > y_data[-1]:
+        y_min = y_data[-1]
+   
+
+    ax.plot(x_data, y_data)  # Plot the new data
+    ax.set_xbound(x_min,x_max)
+    ax.set_ybound(y_min,y_max) 
+    ax.set_xlabel("Load Cell")
+    ax.set_ylabel("Displacement")
+    ax.set_title("Plot")
+    ax.grid(True)
+
+    
+
+    canvas.draw()  # Redraw the canvas
+
+    root.after(10, update_plot)      # Schedule the next update
+
+
+
 
 
 #####################################################################
@@ -215,18 +290,12 @@ def writeToFile(d1, d2, ts):
         w.writerow([d1, d2, ts])
 
 
-#####################################################################
-def cleanup():
-    global processes
-    for p in processes:
-        p.terminate()
-    processes = []
 
 
 #####################################################################
 def create_gui(queue1, queue2):
     global root
-    global labels, read_button
+    global ax, canvas
     global save_directory, file_name_var ,log_button
     global read_button,  data1, data2, timestamp, data_unit1, data_unit2
     global port_var1, port_var2, baudrate_var1, baudrate_var2, baudrate_menu1, baudrate_menu2, port_menu2, port_menu1
@@ -234,8 +303,20 @@ def create_gui(queue1, queue2):
     #####################################################################
     root = tk.Tk()
     root.title("Deformation Test Bench Data Logger")
-    root.geometry("1200x600")
+    root.geometry("1400x600")
     root.config(bg='#ffffff')
+    
+    fig = Figure(figsize=(5,4), dpi=100)
+    ax = fig.add_subplot(111)
+    ax.set_xlabel("Load Cell")
+    ax.set_ylabel("Displacement")
+    ax.set_title("Plot")
+    ax.grid(True)
+    canvas = FigureCanvasTkAgg(fig, master=root)
+    canvas.get_tk_widget().grid(row=0, column=3, rowspan=5, padx=10, pady=10)
+    canvas.draw()
+
+
 
     #################################################################
     read_button = tk.Button(root, 
@@ -308,7 +389,6 @@ def create_gui(queue1, queue2):
     file_name_entry = tk.Entry(file_frame,
                                 textvariable=file_name_var,
                                 font=("Arial", 12, 'italic'), 
-                                
                                 width=20
                                 )
     
@@ -327,7 +407,6 @@ def create_gui(queue1, queue2):
                                height=1, 
                                anchor='w',
                                relief='sunken'
-
                                )
     
     #################################################################
@@ -345,7 +424,6 @@ def create_gui(queue1, queue2):
                                 height=1,
                                 padx=6,
                                 pady=0.0001
-                                
                                 )
     
     #################################################################
@@ -366,11 +444,9 @@ def create_gui(queue1, queue2):
                     highlightcolor="green",
                     highlightthickness=2,
                     justify="center",
-                    
                     padx=10,
                     pady=5,
                     width=18,
-                    
                     state='disabled'
                     )
     
@@ -396,7 +472,6 @@ def create_gui(queue1, queue2):
                         width=11,
                         height=1, 
                         font=("Arial",12)
-                        
                         )
     
     #################################################################
@@ -409,7 +484,6 @@ def create_gui(queue1, queue2):
                         width=11, 
                         height=1, 
                         font=("Arial",12)
-                        
                         )
     
     #################################################################
@@ -446,7 +520,6 @@ def create_gui(queue1, queue2):
     colorData = "#ecf0f1"
     data1 = tk.Label(d1_frame,
                     background=colorData,
-                    
                     fg="black",
                     bd= 6,
                     anchor='s',
@@ -480,7 +553,6 @@ def create_gui(queue1, queue2):
                         width=3,
                         height=1, 
                         font=("Arial",12)
-                        
                         )
     
     data_unit2 = tk.StringVar()
@@ -492,7 +564,6 @@ def create_gui(queue1, queue2):
                         width=3,
                         height=1, 
                         font=("Arial",12)
-                        
                         )
     
     #################################################################
@@ -526,6 +597,8 @@ def create_gui(queue1, queue2):
                     font=("Arial", 12,'bold'),
                     height=1, 
                     width=25)
+    
+    
     
     #################################################################
     data1.pack(side='bottom', padx=0, pady=0)
@@ -568,8 +641,16 @@ def create_gui(queue1, queue2):
     root.protocol('WM_DELETE_WINDOW', cleanup_and_close)
 
     root.after(1, update_labels, queue1, queue2)
+    root.after(10, update_plot)  # Schedule the first plot update
+
     root.mainloop()
 
+#####################################################################
+def cleanup():
+    global processes
+    for p in processes:
+        p.terminate()
+    processes = []
 
 #####################################################################
 def cleanup_and_close():
